@@ -207,10 +207,18 @@ export type DashboardStats = {
 
 export type PendingAction = {
   id: string;
-  kind: "approval" | "workflow";
+  kind:
+    | "approval"
+    | "workflow"
+    | "rfi"
+    | "document_revision"
+    | "ncr"
+    | "inspection"
+    | "correspondence";
   title: string;
   entityType: string;
   entityId: string;
   dueAt: string | null;
   isOverdue: boolean;
+  priority?: number;
 };

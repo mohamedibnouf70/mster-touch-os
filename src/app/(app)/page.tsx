@@ -49,7 +49,21 @@ export default async function DashboardPage() {
                 <li key={action.id} className="flex items-center justify-between border-b border-line pb-3 last:border-0">
                   <div>
                     <p className="text-sm font-medium">{action.title}</p>
-                    <p className="text-xs text-muted">{action.kind === "approval" ? "موافقة" : "مسار عمل"}</p>
+                    <p className="text-xs text-muted">
+                      {action.kind === "approval"
+                        ? "موافقة"
+                        : action.kind === "workflow"
+                          ? "مسار عمل"
+                          : action.kind === "rfi"
+                            ? "طلب استفسار"
+                            : action.kind === "ncr"
+                              ? "عدم مطابقة"
+                              : action.kind === "document_revision"
+                                ? "مراجعة وثيقة"
+                                : action.kind === "inspection"
+                                  ? "فحص"
+                                  : "إجراء"}
+                    </p>
                   </div>
                   <span className={action.isOverdue ? "text-xs text-danger" : "text-xs text-muted"}>
                     {action.isOverdue ? "متأخر" : action.dueAt ? "ضمن المهلة" : "بدون مهلة"}

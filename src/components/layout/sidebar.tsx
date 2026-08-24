@@ -5,18 +5,24 @@ import { usePathname } from "next/navigation";
 import {
   Bell,
   Building2,
+  ClipboardList,
   FileText,
   FolderKanban,
   LayoutDashboard,
+  Search,
   Settings,
   Stamp,
   Users,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const primary = [
   { href: "/", label: "الرئيسية", icon: LayoutDashboard },
   { href: "/projects", label: "المشاريع", icon: FolderKanban },
+  { href: "/engineering", label: "الهندسة", icon: Wrench },
+  { href: "/document-control", label: "مراقبة الوثائق", icon: ClipboardList },
+  { href: "/search", label: "بحث الوثائق", icon: Search },
   { href: "/approvals", label: "الموافقات", icon: Stamp },
   { href: "/documents", label: "المستندات", icon: FileText },
   { href: "/employees", label: "الموظفون", icon: Users },

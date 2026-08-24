@@ -214,6 +214,10 @@ export class CoreRepository {
       unreadNotifications,
       myApprovalSteps,
       myWorkflowSteps,
+      myRfis,
+      myNcrs,
+      revisionDocs,
+      myInspections,
       recentActivity,
     ] = await Promise.all([
       this.supabase
@@ -263,6 +267,34 @@ export class CoreRepository {
         .in("status", ["ready", "in_progress"])
         .limit(10),
       this.supabase
+        .from("rfis")
+        .select("id, rfi_number, subject, response_required_by, status, priority")
+        .eq("organization_id", organizationId)
+        .eq("responsible_engineer_id", profileId)
+        .in("status", ["draft", "internal_review", "submitted", "under_review", "answered"])
+        .limit(15),
+      this.supabase
+        .from("ncrs")
+        .select("id, ncr_number, description, severity, status, target_closure_date")
+        .eq("organization_id", organizationId)
+        .or(`assigned_to.eq.${profileId},responsible_person_id.eq.${profileId}`)
+        .neq("status", "closed")
+        .limit(15),
+      this.supabase
+        .from("documents")
+        .select("id, document_number, title, official_decision, response_due_at")
+        .eq("organization_id", organizationId)
+        .eq("responsible_engineer_id", profileId)
+        .in("official_decision", ["C", "D"])
+        .limit(15),
+      this.supabase
+        .from("inspection_requests")
+        .select("id, ir_number, related_activity, status, inspection_date_requested")
+        .eq("organization_id", organizationId)
+        .or(`site_engineer_id.eq.${profileId},quality_engineer_id.eq.${profileId},requested_by.eq.${profileId}`)
+        .in("status", ["ready", "submitted", "scheduled", "failed", "reinspection_required"])
+        .limit(15),
+      this.supabase
         .from("audit_logs")
         .select("*")
         .eq("organization_id", organizationId)
@@ -283,6 +315,7 @@ export class CoreRepository {
         entityId: request?.entity_id ?? row.request_id,
         dueAt: row.due_at,
         isOverdue: Boolean(row.due_at && row.due_at < now),
+        priority: 2,
       });
     }
     for (const row of myWorkflowSteps.data ?? []) {
@@ -294,8 +327,70 @@ export class CoreRepository {
         entityId: row.instance_id,
         dueAt: row.due_at,
         isOverdue: Boolean(row.due_at && row.due_at < now),
+        priority: 3,
       });
     }
+    for (const row of myRfis.data ?? []) {
+      const overdue = Boolean(
+        row.response_required_by &&
+          row.response_required_by < now &&
+          ["submitted", "under_review"].includes(row.status),
+      );
+      pendingActions.push({
+        id: row.id,
+        kind: "rfi",
+        title: `${row.rfi_number} — ${row.subject}`,
+        entityType: "rfi",
+        entityId: row.id,
+        dueAt: row.response_required_by,
+        isOverdue: overdue,
+        priority: row.priority === "critical" ? 0 : overdue ? 1 : 4,
+      });
+    }
+    for (const row of myNcrs.data ?? []) {
+      const overdue = Boolean(
+        row.target_closure_date && row.target_closure_date < now.slice(0, 10),
+      );
+      pendingActions.push({
+        id: row.id,
+        kind: "ncr",
+        title: `${row.ncr_number} — ${row.description.slice(0, 60)}`,
+        entityType: "ncr",
+        entityId: row.id,
+        dueAt: row.target_closure_date,
+        isOverdue: overdue,
+        priority: row.severity === "critical" ? 0 : overdue ? 1 : 3,
+      });
+    }
+    for (const row of revisionDocs.data ?? []) {
+      pendingActions.push({
+        id: row.id,
+        kind: "document_revision",
+        title: `${row.document_number} — مراجعة مطلوبة (${row.official_decision})`,
+        entityType: "document",
+        entityId: row.id,
+        dueAt: row.response_due_at,
+        isOverdue: Boolean(row.response_due_at && row.response_due_at < now),
+        priority: row.official_decision === "D" ? 1 : 2,
+      });
+    }
+    for (const row of myInspections.data ?? []) {
+      pendingActions.push({
+        id: row.id,
+        kind: "inspection",
+        title: `${row.ir_number} — ${row.related_activity ?? row.status}`,
+        entityType: "inspection_request",
+        entityId: row.id,
+        dueAt: row.inspection_date_requested,
+        isOverdue: ["failed", "reinspection_required"].includes(row.status),
+        priority: row.status === "failed" ? 1 : 3,
+      });
+    }
+
+    pendingActions.sort((a, b) => {
+      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+      return (a.priority ?? 5) - (b.priority ?? 5);
+    });
 
     return {
       stats: {
@@ -306,7 +401,7 @@ export class CoreRepository {
         activeEmployees: activeEmployees.count ?? 0,
         unreadNotifications: unreadNotifications.count ?? 0,
       },
-      pendingActions,
+      pendingActions: pendingActions.slice(0, 25),
       recentActivity: (recentActivity.data ?? []) as AuditLogRecord[],
     };
   }

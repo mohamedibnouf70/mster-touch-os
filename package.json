@@ -12,7 +12,8 @@
     "test:live": "vitest run tests/live",
     "test:all": "vitest run",
     "test:watch": "vitest",
-    "verify:schema": "npx tsx scripts/verify-schema.ts"
+    "verify:schema": "npx tsx scripts/verify-schema.ts",
+    "db:apply-phase2": "npx tsx scripts/apply-phase2-migrations.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
@@ -31,11 +32,13 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
+    "pg": "^8.23.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.11"

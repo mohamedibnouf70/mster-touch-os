@@ -32,6 +32,14 @@ Security-definer helpers read auth tables carefully to avoid recursive RLS.
 
 Typed errors (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`, `Conflict`, `DatabaseError`) map to Arabic-friendly messages; raw DB errors are not shown to end users.
 
+## Phase 2 notes
+
+- `project.read_all` grants organization-wide project visibility (GM / Ops / DC / Quality / Super Admin).
+- Engineers require **active project membership**, **PM assignment**, or an **exact** `user_roles` row with `scope_type = project` — org-scoped `project.read` alone is insufficient (`can_access_project` fixed in migration **030**).
+- Root cause of prior leak: `has_permission()` treats organization-scoped grants as a wildcard for any requested scope; migration 026’s `has_permission('project.read', …, 'project', id)` still matched org-scoped Engineers.
+- Issued transmittals and their items are immutable via BEFORE triggers (migration **030**). Authenticated updates raise; service-role may bypass for ops/fixture cleanup only.
+- Shop drawing “approved for execution” requires official decision A/B and non-superseded status.
+
 ## Checklist (Phase 1)
 
 - [x] No service role in client bundles

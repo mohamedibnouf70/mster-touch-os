@@ -30,9 +30,15 @@ Includes (non-exhaustive): `project.*`, `user.*`, `document.*`, `approval.*`, `e
 
 See `src/lib/permissions/catalog.ts` and migration `013_seed_system.sql`.
 
+## Phase 2 permissions
+
+Added resource families: `engineering.*`, `document_control.*`, `rfi.*`, `submittal.*`, `shop_drawing.*`, `method_statement.*`, `inspection.*`, `ncr.*`, `report.*`, `correspondence.*`, `transmittal.*`, plus `project.read_all`.
+
+**Viewer** no longer receives every `*.read` key — only a limited Phase 1 read set.
+
 ## Contextual access
 
-Architecture supports project-scoped grants so a Project Manager can later be limited to assigned projects. Phase 1 RLS also allows access when the user is project manager or active `project_members` entry (`can_access_project`).
+Architecture supports project-scoped grants so a Project Manager can later be limited to assigned projects. Phase 2 RLS allows access when the user has `project.read_all`, is project manager, has an active `project_members` entry, or a project-scoped `user_roles` grant (`can_access_project`).
 
 ## Deactivation
 

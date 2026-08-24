@@ -1,12 +1,12 @@
 # Phases
 
-## Phase 1 (current)
+## Phase 1 (complete)
 
 Foundation + Auth + Organization + RBAC + Project Core + Workflow Core + Approval Core + Documents Foundation + Notifications + Audit.
 
-## Phase 2
+## Phase 2 (application layer largely complete — apply DB migrations 015–029)
 
-Complete Project Operations & Engineering Document Control.
+Project Operations & Engineering Document Control — disciplines, document register, RFI, MAT, SHD, MS, IR, NCR, reports, correspondence, transmittals, project-scoped access, deterministic project health, search, My Actions queues.
 
 ## Phase 3
 

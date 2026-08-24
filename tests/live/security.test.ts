@@ -1,9 +1,9 @@
+import "../setup-env";
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import {
   adminClient,
   liveTestConfigured,
   provisionLiveFixture,
-  skipLive,
   verifySchema,
   type LiveFixture,
 } from "./helpers";
@@ -11,10 +11,16 @@ import {
 const configured = liveTestConfigured();
 
 describe.skipIf(!configured)("live schema verification", () => {
-  it("all Phase 1 tables and private storage bucket exist", async () => {
+  it("Phase 1+2 tables and private storage bucket exist", async () => {
     const admin = adminClient();
     const report = await verifySchema(admin);
     const missing = report.tables.filter((t) => !t.ok);
+    if (missing.length) {
+      console.error(
+        "[live-test] Missing tables — apply supabase/phase2_apply_all.sql (015–029) then re-run.",
+        missing.map((m) => m.name),
+      );
+    }
     expect(missing, JSON.stringify(missing, null, 2)).toEqual([]);
     expect(report.bucketPrivate).toBe(true);
   });
@@ -34,9 +40,9 @@ describe.skipIf(!configured)("live security & functional matrix", () => {
   it("unauthenticated client cannot read projects", async () => {
     const { anonClient } = await import("./helpers");
     const anon = anonClient();
-    const { data, error } = await anon.from("projects").select("id").limit(1);
+    const { data } = await anon.from("projects").select("id").limit(1);
+    // RLS returns an empty set without necessarily surfacing an error.
     expect(data ?? []).toEqual([]);
-    expect(error).toBeTruthy();
   });
 
   it("org A user cannot read org B project by id", async () => {
@@ -50,6 +56,22 @@ describe.skipIf(!configured)("live security & functional matrix", () => {
     const { signInAs } = await import("./helpers");
     const restricted = await signInAs(fx.users.restricted.email, fx.users.restricted.password);
     const { data } = await restricted.from("projects").select("id").eq("id", fx.projectId).maybeSingle();
+    expect(data).toBeNull();
+  });
+
+  it("engineer without project membership cannot read project after scoped access", async () => {
+    const { signInAs } = await import("./helpers");
+    // Ensure engineer is not a member of the fixture project
+    const { adminClient } = await import("./helpers");
+    const admin = adminClient();
+    await admin
+      .from("project_members")
+      .update({ is_active: false })
+      .eq("project_id", fx.projectId)
+      .eq("profile_id", fx.users.engineer.id);
+
+    const eng = await signInAs(fx.users.engineer.email, fx.users.engineer.password);
+    const { data } = await eng.from("projects").select("id").eq("id", fx.projectId).maybeSingle();
     expect(data).toBeNull();
   });
 
@@ -247,11 +269,12 @@ describe.skipIf(!configured)("live security & functional matrix", () => {
       .limit(1);
     expect((logs ?? []).length >= 1).toBe(true);
 
-    const { error: delErr } = await admin.from("audit_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    expect(delErr).toBeTruthy();
+    const { data: deleted, error: delErr } = await admin
+      .from("audit_logs")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000")
+      .select("id");
+    expect(delErr).toBeNull();
+    expect(deleted ?? []).toEqual([]);
   });
 });
-
-if (!configured) {
-  skipLive("Set LIVE_TEST_ENABLED=true and Supabase keys in .env.local to run live tests.");
-}

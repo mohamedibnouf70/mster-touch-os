@@ -12,7 +12,7 @@ import {
   uploadDocumentAction,
 } from "@/server/use-cases/platform";
 
-const laterTabs = ["المالية", "المشتريات", "الهندسة", "السلامة", "الجودة", "الاتصالات", "الذكاء الاصطناعي"];
+const laterTabs = ["المالية", "المشتريات", "السلامة", "الجودة", "الاتصالات", "الذكاء الاصطناعي"];
 
 export default async function ProjectDetailPage({
   params,
@@ -31,12 +31,13 @@ export default async function ProjectDetailPage({
   const project = await repo.getProject(ctx.organization.id, id);
   if (!project) notFound();
 
-  const [stages, members, documents, users, definitions] = await Promise.all([
+  const [stages, members, documents, users, definitions, health] = await Promise.all([
     repo.listProjectStages(project.id),
     repo.listProjectMembers(project.id),
     repo.listDocuments(ctx.organization.id, project.id),
     repo.listUsers(ctx.organization.id),
     supabase.from("workflow_definitions").select("id, name_ar").eq("status", "published"),
+    supabase.rpc("compute_project_health", { p_project_id: project.id }),
   ]);
 
   const canSeeFinance = hasPermission(ctx, "finance.read");
@@ -44,10 +45,69 @@ export default async function ProjectDetailPage({
     { id: "overview", label: "نظرة عامة" },
     { id: "stages", label: "المراحل" },
     { id: "team", label: "الفريق" },
+    { id: "engineering", label: "الهندسة" },
     { id: "documents", label: "المستندات" },
+    { id: "rfis", label: "RFI" },
+    { id: "submittals", label: "اعتمادات" },
+    { id: "shop", label: "مخططات" },
+    { id: "inspections", label: "فحوصات" },
+    { id: "ncr", label: "NCR" },
+    { id: "reports", label: "تقارير" },
+    { id: "correspondence", label: "مراسلات" },
     { id: "approvals", label: "الموافقات" },
     { id: "activity", label: "النشاط" },
   ];
+
+  const [projectRfis, projectMats, projectShds, projectIrs, projectNcrs, projectReports, projectCors] =
+    await Promise.all([
+      supabase
+        .from("rfis")
+        .select("id, rfi_number, subject, status")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("material_submittals")
+        .select("id, mat_number, material_category, status, official_decision")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("shop_drawings")
+        .select("id, shd_number, drawing_title, status, approved_for_execution")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("inspection_requests")
+        .select("id, ir_number, related_activity, status")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("ncrs")
+        .select("id, ncr_number, severity, status, description")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("project_reports")
+        .select("id, report_type, period_start, period_end, status")
+        .eq("project_id", project.id)
+        .order("period_start", { ascending: false })
+        .limit(20),
+      supabase
+        .from("correspondence")
+        .select("id, reference_number, subject, direction, status")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+    ]);
+
+  const healthTone =
+    health.data === "red" ? "danger" : health.data === "amber" ? "warning" : "success";
+  const healthLabel =
+    health.data === "red" ? "أحمر" : health.data === "amber" ? "كهرماني" : "أخضر";
 
   return (
     <div>
@@ -61,6 +121,7 @@ export default async function ProjectDetailPage({
           المخاطر: {project.risk_level}
         </Badge>
         <Badge>{project.progress_percentage}%</Badge>
+        <Badge tone={healthTone as "danger" | "warning" | "success"}>صحة المشروع: {healthLabel}</Badge>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2 border-b border-line pb-2">
@@ -215,6 +276,125 @@ export default async function ProjectDetailPage({
         </div>
       ) : null}
 
+      {tab === "engineering" ? (
+        <Card>
+          <h2 className="mb-2 text-base font-semibold text-navy">عمليات الهندسة لهذا المشروع</h2>
+          <p className="mb-4 text-sm text-muted">
+            صحة المشروع: {healthLabel}. استخدم التبويبات أدناه أو لوحة الهندسة للإدخال الكامل.
+          </p>
+          <a
+            href={`/engineering?project=${project.id}`}
+            className="inline-flex rounded-md bg-navy px-3.5 py-2 text-sm font-medium text-white"
+          >
+            فتح لوحة الهندسة
+          </a>
+          <a
+            href={`/document-control?q=${encodeURIComponent(project.project_code)}`}
+            className="ms-3 inline-flex rounded-md border border-line px-3.5 py-2 text-sm font-medium"
+          >
+            سجل مراقبة الوثائق
+          </a>
+        </Card>
+      ) : null}
+
+      {tab === "rfis" ? (
+        <ProjectMiniTable
+          title="طلبات الاستفسار الفني"
+          empty="لا توجد طلبات RFI."
+          headers={["الرقم", "الموضوع", "الحالة"]}
+          rows={(projectRfis.data ?? []).map((r) => [r.rfi_number, r.subject, r.status])}
+          actionHref={`/engineering?module=rfi&project=${project.id}`}
+          actionLabel="إدارة RFI"
+        />
+      ) : null}
+
+      {tab === "submittals" ? (
+        <ProjectMiniTable
+          title="اعتمادات المواد"
+          empty="لا توجد اعتمادات."
+          headers={["الرقم", "الفئة", "الحالة", "القرار"]}
+          rows={(projectMats.data ?? []).map((m) => [
+            m.mat_number,
+            m.material_category,
+            m.status,
+            m.official_decision ?? "—",
+          ])}
+          actionHref={`/engineering?module=mat&project=${project.id}`}
+          actionLabel="إدارة الاعتمادات"
+        />
+      ) : null}
+
+      {tab === "shop" ? (
+        <ProjectMiniTable
+          title="المخططات التنفيذية"
+          empty="لا توجد مخططات."
+          headers={["الرقم", "العنوان", "الحالة", "معتمد للتنفيذ"]}
+          rows={(projectShds.data ?? []).map((s) => [
+            s.shd_number,
+            s.drawing_title,
+            s.status,
+            s.approved_for_execution ? "معتمد للتنفيذ" : "—",
+          ])}
+          actionHref={`/engineering?module=shd&project=${project.id}`}
+          actionLabel="إدارة المخططات"
+        />
+      ) : null}
+
+      {tab === "inspections" ? (
+        <ProjectMiniTable
+          title="طلبات الفحص"
+          empty="لا توجد فحوصات."
+          headers={["الرقم", "النشاط", "الحالة"]}
+          rows={(projectIrs.data ?? []).map((i) => [i.ir_number, i.related_activity ?? "—", i.status])}
+          actionHref={`/engineering?module=ir&project=${project.id}`}
+          actionLabel="إدارة الفحوصات"
+        />
+      ) : null}
+
+      {tab === "ncr" ? (
+        <ProjectMiniTable
+          title="تقارير عدم المطابقة"
+          empty="لا توجد تقارير."
+          headers={["الرقم", "الوصف", "الخطورة", "الحالة"]}
+          rows={(projectNcrs.data ?? []).map((n) => [
+            n.ncr_number,
+            n.description.slice(0, 80),
+            n.severity,
+            n.status,
+          ])}
+          actionHref={`/engineering?module=ncr&project=${project.id}`}
+          actionLabel="إدارة NCR"
+        />
+      ) : null}
+
+      {tab === "reports" ? (
+        <ProjectMiniTable
+          title="تقارير المشروع"
+          empty="لا توجد تقارير."
+          headers={["النوع", "من", "إلى", "الحالة"]}
+          rows={(projectReports.data ?? []).map((r) => [
+            r.report_type,
+            r.period_start,
+            r.period_end,
+            r.status,
+          ])}
+        />
+      ) : null}
+
+      {tab === "correspondence" ? (
+        <ProjectMiniTable
+          title="سجل المراسلات"
+          empty="لا توجد مراسلات."
+          headers={["المرجع", "الموضوع", "الاتجاه", "الحالة"]}
+          rows={(projectCors.data ?? []).map((c) => [
+            c.reference_number,
+            c.subject,
+            c.direction,
+            c.status,
+          ])}
+        />
+      ) : null}
+
       {tab === "documents" ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
@@ -317,5 +497,62 @@ export default async function ProjectDetailPage({
         </Card>
       ) : null}
     </div>
+  );
+}
+
+function ProjectMiniTable({
+  title,
+  empty,
+  headers,
+  rows,
+  actionHref,
+  actionLabel,
+}: {
+  title: string;
+  empty: string;
+  headers: string[];
+  rows: string[][];
+  actionHref?: string;
+  actionLabel?: string;
+}) {
+  return (
+    <Card>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-navy">{title}</h2>
+        {actionHref ? (
+          <a href={actionHref} className="text-sm text-navy underline">
+            {actionLabel ?? "إدارة"}
+          </a>
+        ) : null}
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState title={empty} />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-paper text-right text-muted">
+              <tr>
+                {headers.map((h) => (
+                  <th key={h} className="px-3 py-2 font-medium">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i} className="border-t border-line">
+                  {row.map((cell, j) => (
+                    <td key={j} className={`px-3 py-2 ${j === 0 ? "font-medium text-navy" : ""}`}>
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }

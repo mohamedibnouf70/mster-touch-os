@@ -1,4 +1,7 @@
+import { loadTestEnv } from "../setup-env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+loadTestEnv();
 
 export const MASTER_TOUCH_ORG_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -42,6 +45,21 @@ export const EXPECTED_TABLES = [
   "notifications",
   "audit_logs",
   "domain_events",
+  "engineering_disciplines",
+  "project_disciplines",
+  "document_type_codes",
+  "document_number_counters",
+  "rfis",
+  "material_submittals",
+  "shop_drawings",
+  "method_statements",
+  "inspection_requests",
+  "ncrs",
+  "project_reports",
+  "correspondence",
+  "project_contacts",
+  "transmittals",
+  "transmittal_items",
 ] as const;
 
 export const EXPECTED_RPCS = [
@@ -55,6 +73,13 @@ export const EXPECTED_RPCS = [
   "can_access_project",
   "can_act_on_approval_step",
   "can_act_on_workflow_step",
+  "generate_document_number",
+  "register_controlled_document",
+  "create_document_revision",
+  "apply_document_approval_decision",
+  "issue_transmittal",
+  "compute_project_health",
+  "has_project_permission",
 ] as const;
 
 export function liveTestConfigured(): boolean {

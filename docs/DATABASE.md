@@ -20,6 +20,20 @@ Apply in numeric order under `supabase/migrations/`:
 | `012_storage.sql` | private bucket + storage policies |
 | `013_seed_system.sql` | Master Touch org, departments, RBAC, templates |
 | `014_assignee_enforcement.sql` | Approval/workflow assignee enforcement on RPCs |
+| `015_engineering_disciplines.sql` | Disciplines + project_disciplines |
+| `016_document_control.sql` | Register metadata, R00 numbering |
+| `017_rfi.sql` | RFI module |
+| `018_material_submittals.sql` | Material submittals |
+| `019_shop_drawings.sql` | Shop drawings + AFE guard |
+| `020_method_statements.sql` | Method statements |
+| `021_inspection_requests.sql` | Inspection requests |
+| `022_ncr.sql` | NCR |
+| `023_reports_correspondence.sql` | Reports + correspondence |
+| `024_contacts_transmittals.sql` | Contacts + immutable transmittals |
+| `025_phase2_rbac.sql` | Phase 2 permissions + project.read_all |
+| `026_phase2_rls.sql` | Phase 2 RLS + scoped project access |
+| `027_phase2_rpc.sql` | Register/revise/approve/issue/health RPCs |
+| `028_phase2_indexes_workflows.sql` | Indexes + workflow seeds |
 
 Development-only seeds (fake users/finance) must **never** live in `013`. Add a separate `9xx_dev_seed.sql` if needed.
 
