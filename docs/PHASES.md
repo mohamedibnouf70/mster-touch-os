@@ -8,9 +8,11 @@ Foundation + Auth + Organization + RBAC + Project Core + Workflow Core + Approva
 
 Project Operations & Engineering Document Control — disciplines, document register, RFI, MAT, SHD, MS, IR, NCR, reports, correspondence, transmittals, project-scoped access, deterministic project health, search, My Actions queues.
 
-## Phase 3
+## Phase 3 (migrations 031–045 — apply to Supabase)
 
-Procurement, Suppliers, RFQs, POs, Quotations.
+Commercial, Procurement & Project Finance — suppliers, budgets, PR→RFQ→quotation→PO, receipts, supplier invoices/payments, client contracts/valuations/invoices, variations, commercial health, finance/procurement dashboards.
+
+See `docs/PHASE3_COMMERCIAL.md`.
 
 ## Phase 4
 

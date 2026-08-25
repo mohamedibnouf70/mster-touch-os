@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui/primitives";
 import { getAuthContext } from "@/server/context";
@@ -12,7 +13,7 @@ import {
   uploadDocumentAction,
 } from "@/server/use-cases/platform";
 
-const laterTabs = ["المالية", "المشتريات", "السلامة", "الجودة", "الاتصالات", "الذكاء الاصطناعي"];
+const laterTabs = ["السلامة", "الجودة", "الاتصالات", "الذكاء الاصطناعي"];
 
 export default async function ProjectDetailPage({
   params,
@@ -40,7 +41,8 @@ export default async function ProjectDetailPage({
     supabase.rpc("compute_project_health", { p_project_id: project.id }),
   ]);
 
-  const canSeeFinance = hasPermission(ctx, "finance.read");
+  const canSeeFinance =
+    hasPermission(ctx, "finance.read") || hasPermission(ctx, "commercial_reports.read");
   const tabs = [
     { id: "overview", label: "نظرة عامة" },
     { id: "stages", label: "المراحل" },
@@ -54,11 +56,12 @@ export default async function ProjectDetailPage({
     { id: "ncr", label: "NCR" },
     { id: "reports", label: "تقارير" },
     { id: "correspondence", label: "مراسلات" },
+    { id: "commercial", label: "التجاري" },
     { id: "approvals", label: "الموافقات" },
     { id: "activity", label: "النشاط" },
   ];
 
-  const [projectRfis, projectMats, projectShds, projectIrs, projectNcrs, projectReports, projectCors] =
+  const [projectRfis, projectMats, projectShds, projectIrs, projectNcrs, projectReports, projectCors, projectPrs, projectPos, projectSupplierInv, commercialSummary, commercialHealth] =
     await Promise.all([
       supabase
         .from("rfis")
@@ -102,6 +105,30 @@ export default async function ProjectDetailPage({
         .eq("project_id", project.id)
         .order("created_at", { ascending: false })
         .limit(30),
+      supabase
+        .from("purchase_requests")
+        .select("id, pr_number, status, estimated_cost, currency")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("purchase_orders")
+        .select("id, po_number, status, total, currency")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("supplier_invoices")
+        .select("id, invoice_number, status, total, currency, due_date")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      canSeeFinance
+        ? supabase.rpc("compute_project_commercial_summary", { p_project_id: project.id })
+        : Promise.resolve({ data: null, error: null }),
+      canSeeFinance
+        ? supabase.rpc("compute_project_commercial_health", { p_project_id: project.id })
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
   const healthTone =
@@ -393,6 +420,105 @@ export default async function ProjectDetailPage({
             c.status,
           ])}
         />
+      ) : null}
+
+      {tab === "commercial" ? (
+        <div className="space-y-6">
+          {canSeeFinance && commercialSummary.data ? (
+            <Card>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-base font-semibold text-navy">ملخص تجاري</h2>
+                {commercialHealth.data ? (
+                  <Badge
+                    tone={
+                      commercialHealth.data === "red"
+                        ? "danger"
+                        : commercialHealth.data === "amber"
+                          ? "warning"
+                          : "success"
+                    }
+                  >
+                    صحة تجارية: {commercialHealth.data}
+                  </Badge>
+                ) : null}
+              </div>
+              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+                {Object.entries(commercialSummary.data as Record<string, number>).map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-4 border-b border-line pb-2">
+                    <dt className="text-muted">{k}</dt>
+                    <dd className="font-medium text-navy">{Number(v).toLocaleString("ar-SA")}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
+          ) : (
+            <Card>
+              <p className="text-sm text-muted">
+                الملخص التجاري يتطلب صلاحية المالية أو التقارير التجارية.
+              </p>
+            </Card>
+          )}
+          {canSeeFinance ? (
+            <div className="flex flex-wrap gap-3">
+              <Link href={`/projects/${id}/commercial/contract`} className="text-sm text-navy underline">
+                العقد
+              </Link>
+              <Link href={`/projects/${id}/commercial/milestones`} className="text-sm text-navy underline">
+                مراحل الدفع
+              </Link>
+              <Link href={`/projects/${id}/commercial/cashflow`} className="text-sm text-navy underline">
+                التدفق النقدي
+              </Link>
+              <Link href="/finance/client-valuations" className="text-sm text-navy underline">
+                مستخلصات العميل
+              </Link>
+              <Link href="/finance/variations" className="text-sm text-navy underline">
+                أوامر التغيير
+              </Link>
+            </div>
+          ) : null}
+          <div className="grid gap-6 xl:grid-cols-2">
+            <ProjectMiniTable
+              title="طلبات الشراء"
+              empty="لا توجد طلبات شراء."
+              headers={["الرقم", "الحالة", "التكلفة"]}
+              rows={(projectPrs.data ?? []).map((p) => [
+                p.pr_number,
+                p.status,
+                p.estimated_cost != null ? `${p.estimated_cost} ${p.currency}` : "—",
+              ])}
+              actionHref="/procurement"
+              actionLabel="المشتريات"
+            />
+            <ProjectMiniTable
+              title="أوامر الشراء"
+              empty="لا توجد أوامر شراء."
+              headers={["الرقم", "الحالة", "الإجمالي"]}
+              rows={(projectPos.data ?? []).map((p) => [
+                p.po_number,
+                p.status,
+                `${p.total} ${p.currency}`,
+              ])}
+              actionHref="/procurement"
+              actionLabel="المشتريات"
+            />
+          </div>
+          {canSeeFinance ? (
+            <ProjectMiniTable
+              title="فواتير الموردين"
+              empty="لا توجد فواتير."
+              headers={["الرقم", "الحالة", "المبلغ", "الاستحقاق"]}
+              rows={(projectSupplierInv.data ?? []).map((i) => [
+                i.invoice_number,
+                i.status,
+                `${i.total} ${i.currency}`,
+                i.due_date ?? "—",
+              ])}
+              actionHref="/finance"
+              actionLabel="المالية"
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {tab === "documents" ? (

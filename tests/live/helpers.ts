@@ -60,6 +60,34 @@ export const EXPECTED_TABLES = [
   "project_contacts",
   "transmittals",
   "transmittal_items",
+  "supplier_categories",
+  "suppliers",
+  "supplier_contacts",
+  "cost_categories",
+  "project_budgets",
+  "project_budget_items",
+  "purchase_requests",
+  "purchase_request_items",
+  "rfqs",
+  "rfq_items",
+  "rfq_suppliers",
+  "supplier_quotations",
+  "supplier_quotation_items",
+  "quotation_comparisons",
+  "purchase_orders",
+  "purchase_order_items",
+  "goods_receipts",
+  "goods_receipt_items",
+  "supplier_invoices",
+  "supplier_payments",
+  "project_contracts",
+  "contract_milestones",
+  "client_valuations",
+  "client_invoices",
+  "client_payments",
+  "variations",
+  "approval_threshold_rules",
+  "entity_documents",
 ] as const;
 
 export const EXPECTED_RPCS = [
@@ -80,6 +108,28 @@ export const EXPECTED_RPCS = [
   "issue_transmittal",
   "compute_project_health",
   "has_project_permission",
+  "generate_supplier_code",
+  "generate_commercial_number",
+  "get_supplier_banking",
+  "record_supplier_payment",
+  "evaluate_supplier_invoice_match",
+  "issue_purchase_order",
+  "post_goods_receipt",
+  "approve_variation",
+  "compute_project_commercial_summary",
+  "compute_project_commercial_health",
+  "can_record_supplier_payment",
+  "record_client_payment",
+  "can_record_client_payment",
+  "issue_client_invoice",
+  "record_client_valuation_certification",
+  "recalculate_client_valuation",
+  "activate_project_contract",
+  "mark_contract_milestone_eligible",
+  "decide_entity_approval",
+  "can_issue_client_invoice",
+  "can_certify_client_valuation",
+  "can_approve_variation",
 ] as const;
 
 export function liveTestConfigured(): boolean {
@@ -112,11 +162,129 @@ export function anonClient(): SupabaseClient {
   );
 }
 
-export async function signInAs(email: string, password: string): Promise<SupabaseClient> {
+type CachedAuthSession = {
+  access_token: string;
+  refresh_token: string;
+};
+
+const authSessionCache = new Map<string, CachedAuthSession>();
+const authClientCache = new Map<string, SupabaseClient>();
+const authSessionInflight = new Map<string, Promise<CachedAuthSession>>();
+let passwordSignInGate: Promise<void> = Promise.resolve();
+
+function isAuthRateLimitError(error: { status?: number; code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const status = error.status;
+  const code = (error.code ?? "").toLowerCase();
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    status === 429 ||
+    code.includes("over_request_rate_limit") ||
+    code.includes("rate_limit") ||
+    message.includes("rate limit")
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withPasswordSignInLock<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = passwordSignInGate;
+  let release!: () => void;
+  passwordSignInGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+async function passwordSignInWithRetry(email: string, password: string): Promise<CachedAuthSession> {
+  return withPasswordSignInLock(async () => {
+    const cached = authSessionCache.get(email.toLowerCase());
+    if (cached) return cached;
+
+    const maxAttempts = 3;
+    let lastMessage = "unknown error";
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const client = anonClient();
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (!error && data.session?.access_token && data.session.refresh_token) {
+        const session: CachedAuthSession = {
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        };
+        authSessionCache.set(email.toLowerCase(), session);
+        return session;
+      }
+
+      lastMessage = error?.message ?? "missing session";
+      if (!isAuthRateLimitError(error) || attempt === maxAttempts) {
+        throw new Error(`signIn failed for ${email}: ${lastMessage}`);
+      }
+      await sleep(1000 * 2 ** (attempt - 1));
+    }
+
+    throw new Error(`signIn failed for ${email}: ${lastMessage}`);
+  });
+}
+
+async function resolveAuthSession(email: string, password: string): Promise<CachedAuthSession> {
+  const key = email.toLowerCase();
+  const cached = authSessionCache.get(key);
+  if (cached) return cached;
+
+  const inflight = authSessionInflight.get(key);
+  if (inflight) return inflight;
+
+  const pending = passwordSignInWithRetry(email, password).finally(() => {
+    authSessionInflight.delete(key);
+  });
+  authSessionInflight.set(key, pending);
+  return pending;
+}
+
+async function clientFromSession(session: CachedAuthSession, email: string, password: string): Promise<SupabaseClient> {
   const client = anonClient();
-  const { error } = await client.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(`signIn failed for ${email}: ${error.message}`);
+  const { error } = await client.auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+  });
+  if (!error) return client;
+
+  authSessionCache.delete(email.toLowerCase());
+  const refreshed = await passwordSignInWithRetry(email, password);
+  const retryClient = anonClient();
+  const { error: retryError } = await retryClient.auth.setSession({
+    access_token: refreshed.access_token,
+    refresh_token: refreshed.refresh_token,
+  });
+  if (retryError) {
+    throw new Error(`signIn session restore failed for ${email}: ${retryError.message}`);
+  }
+  return retryClient;
+}
+
+export async function signInAs(email: string, password: string): Promise<SupabaseClient> {
+  const key = email.toLowerCase();
+  const cachedClient = authClientCache.get(key);
+  if (cachedClient) return cachedClient;
+
+  const session = await resolveAuthSession(email, password);
+  const client = await clientFromSession(session, email, password);
+  authClientCache.set(key, client);
   return client;
+}
+
+function forgetAuthSession(email: string): void {
+  const key = email.toLowerCase();
+  authSessionCache.delete(key);
+  authClientCache.delete(key);
 }
 
 async function roleId(admin: SupabaseClient, code: string): Promise<string> {
@@ -235,10 +403,14 @@ export async function provisionLiveFixture(): Promise<LiveFixture> {
     finance: await createUserWithRole(admin, {
       email: emails.finance,
       password: passwords.finance,
-      roleCode: "finance_officer",
+      roleCode: "finance_manager",
       orgId: orgAId,
     }),
   };
+
+  for (const role of Object.keys(emails) as LiveRole[]) {
+    await signInAs(emails[role], passwords[role]);
+  }
 
   const adminSession = await signInAs(emails.admin, passwords.admin);
   const { data: project, error: projectErr } = await adminSession.rpc("create_project", {
@@ -283,6 +455,7 @@ export async function provisionLiveFixture(): Promise<LiveFixture> {
   const cleanup = async () => {
     await admin.from("organizations").delete().eq("id", orgB.id);
     for (const email of Object.values(emails)) {
+      forgetAuthSession(email);
       const { data: listed } = await admin.auth.admin.listUsers();
       const match = listed.users.find((u) => u.email === email);
       if (match) await admin.auth.admin.deleteUser(match.id);

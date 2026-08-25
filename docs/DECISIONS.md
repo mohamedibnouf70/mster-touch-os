@@ -47,3 +47,15 @@
 **Decision:** `is_active` / membership status / `archived_at`.
 
 **Why:** Preserve auditability and AI-explainable history.
+
+## ADR-009 — Project commercial control without GL (Phase 3)
+
+**Decision:** Operational procurement/finance tables + derived summaries; no general ledger or double-entry.
+
+**Why:** Master Touch needs project cost/commitment/AP/AR control first; statutory accounting belongs to a later phase or external ERP.
+
+## ADR-010 — Issued commercial document immutability
+
+**Decision:** PO/valuation/invoice/payment history protected by triggers; changes via status transitions or future amendment records.
+
+**Why:** Financial audit trail and AI explainability require stable issued records.

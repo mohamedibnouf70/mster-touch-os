@@ -1,10 +1,13 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, EmptyState, Field, PageHeader, Select, Textarea } from "@/components/ui/primitives";
 import { getAuthContext } from "@/server/context";
 import { hasPermission } from "@/server/policies/authorize";
 import { CoreRepository } from "@/server/repositories/core.repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isEntityApprovalTypeSupported } from "@/lib/approvals/entity-approval-types";
 import { decideApprovalAction } from "@/server/use-cases/platform";
+import { decideEntityApprovalAction } from "@/server/use-cases/entity-approvals";
 
 type ApprovalRow = {
   id: string;
@@ -55,9 +58,9 @@ export default async function ApprovalsPage({
         title="الموافقات"
         description="طلبات الاعتماد الرسمية برموز القرار A–E"
         actions={
-          <a href={overdue ? "/approvals" : "/approvals?overdue=1"} className="text-sm text-navy underline">
+          <Link href={overdue ? "/approvals" : "/approvals?overdue=1"} className="text-sm text-navy underline">
             {overdue ? "عرض الكل" : "المتأخرة فقط"}
-          </a>
+          </Link>
         }
       />
 
@@ -73,6 +76,10 @@ export default async function ApprovalsPage({
                 (step.status === "pending" || step.status === "in_progress"),
             );
             const isOverdue = Boolean(request.due_at && request.due_at < nowIso);
+
+            const formAction = isEntityApprovalTypeSupported(request.entity_type)
+              ? decideEntityApprovalAction
+              : decideApprovalAction;
 
             return (
               <Card key={request.id}>
@@ -107,7 +114,8 @@ export default async function ApprovalsPage({
                 </ul>
 
                 {canDecide && myStep ? (
-                  <form action={decideApprovalAction} className="mt-4 grid gap-3 border-t border-line pt-4 md:grid-cols-3">
+                  <form action={formAction} className="mt-4 grid gap-3 border-t border-line pt-4 md:grid-cols-3">
+                    <input type="hidden" name="approvalRequestId" value={request.id} />
                     <input type="hidden" name="stepId" value={myStep.id} />
                     <Field label="رمز القرار">
                       <Select name="officialCode" required defaultValue="A">

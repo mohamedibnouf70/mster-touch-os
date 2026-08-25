@@ -34,8 +34,25 @@ Apply in numeric order under `supabase/migrations/`:
 | `026_phase2_rls.sql` | Phase 2 RLS + scoped project access |
 | `027_phase2_rpc.sql` | Register/revise/approve/issue/health RPCs |
 | `028_phase2_indexes_workflows.sql` | Indexes + workflow seeds |
+| `029_phase2_live_validation.sql` | Phase 2 live validation helpers |
+| `030_phase2_live_security_fixes.sql` | Project access + transmittal immutability fixes |
+| `031_suppliers.sql` | Suppliers, categories, contacts |
+| `032_project_budget.sql` | Budgets, cost categories, VAT config |
+| `033_purchase_requests.sql` | Purchase requests + items |
+| `034_rfq.sql` | RFQ + supplier invitations |
+| `035_quotations.sql` | Supplier quotations + comparison |
+| `036_purchase_orders.sql` | PO + issued immutability |
+| `037_goods_receipts.sql` | Goods/material receipts |
+| `038_supplier_invoices_payments.sql` | Supplier invoices + payments |
+| `039_project_contracts.sql` | Client contracts + milestones |
+| `040_client_valuations.sql` | Valuations, client invoices, receipts |
+| `041_variations.sql` | Change orders + approval thresholds |
+| `042_phase3_rbac.sql` | Phase 3 permissions |
+| `043_phase3_rls.sql` | Phase 3 RLS |
+| `044_phase3_rpc.sql` | Commercial RPCs |
+| `045_phase3_indexes_cashflow.sql` | Indexes + cash-flow view |
 
-Development-only seeds (fake users/finance) must **never** live in `013`. Add a separate `9xx_dev_seed.sql` if needed.
+Apply Phase 3 in one pass: `supabase/phase3_apply_all.sql` (after `030`).
 
 ## Core entities
 

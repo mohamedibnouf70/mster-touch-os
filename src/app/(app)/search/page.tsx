@@ -23,7 +23,7 @@ export default async function SearchPage({
 
   if (term.length >= 2) {
     const pattern = `%${term}%`;
-    const [docs, rfis, mats, shds, irs, ncrs, trns, cors] = await Promise.all([
+    const [docs, rfis, mats, shds, irs, ncrs, trns, cors, prs, rfqsSearch, posSearch, supplierSearch, invoiceSearch, contractsSearch, valuationsSearch, clientInvSearch, variationsSearch, clientPaySearch] = await Promise.all([
       supabase
         .from("documents")
         .select("id, document_number, title, type_code, status, project_id")
@@ -72,6 +72,86 @@ export default async function SearchPage({
         .eq("organization_id", ctx.organization.id)
         .or(`reference_number.ilike.${pattern},subject.ilike.${pattern}`)
         .limit(15),
+      hasPermission(ctx, "purchase_request.read")
+        ? supabase
+            .from("purchase_requests")
+            .select("id, pr_number, status")
+            .eq("organization_id", ctx.organization.id)
+            .ilike("pr_number", pattern)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "rfq.read")
+        ? supabase
+            .from("rfqs")
+            .select("id, rfq_number, title, status")
+            .eq("organization_id", ctx.organization.id)
+            .or(`rfq_number.ilike.${pattern},title.ilike.${pattern}`)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "purchase_order.read")
+        ? supabase
+            .from("purchase_orders")
+            .select("id, po_number, status")
+            .eq("organization_id", ctx.organization.id)
+            .ilike("po_number", pattern)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "supplier.read")
+        ? supabase
+            .from("suppliers")
+            .select("id, supplier_code, legal_name, status")
+            .eq("organization_id", ctx.organization.id)
+            .or(`supplier_code.ilike.${pattern},legal_name.ilike.${pattern}`)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "supplier_invoice.read")
+        ? supabase
+            .from("supplier_invoices")
+            .select("id, invoice_number, status")
+            .eq("organization_id", ctx.organization.id)
+            .ilike("invoice_number", pattern)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "finance.read") || hasPermission(ctx, "commercial_reports.read")
+        ? supabase
+            .from("project_contracts")
+            .select("id, contract_number, client_name, status, project_id")
+            .eq("organization_id", ctx.organization.id)
+            .or(`contract_number.ilike.${pattern},client_name.ilike.${pattern}`)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "client_valuation.read")
+        ? supabase
+            .from("client_valuations")
+            .select("id, valuation_number, status")
+            .eq("organization_id", ctx.organization.id)
+            .ilike("valuation_number", pattern)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "client_invoice.read")
+        ? supabase
+            .from("client_invoices")
+            .select("id, invoice_number, status")
+            .eq("organization_id", ctx.organization.id)
+            .ilike("invoice_number", pattern)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "variation.read")
+        ? supabase
+            .from("variations")
+            .select("id, vo_number, description, status")
+            .eq("organization_id", ctx.organization.id)
+            .or(`vo_number.ilike.${pattern},description.ilike.${pattern}`)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
+      hasPermission(ctx, "client_payment.read")
+        ? supabase
+            .from("client_payments")
+            .select("id, reference, amount, client_invoice_id")
+            .eq("organization_id", ctx.organization.id)
+            .ilike("reference", pattern)
+            .limit(15)
+        : Promise.resolve({ data: [] }),
     ]);
 
     for (const d of docs.data ?? []) {
@@ -146,19 +226,58 @@ export default async function SearchPage({
         href: `/projects/${c.project_id}?tab=correspondence`,
       });
     }
+    for (const p of (prs as { data: Array<{id: string; pr_number: string; status: string}> }).data ?? []) {
+      hits.push({ kind: "PR", number: p.pr_number, title: "طلب شراء", status: p.status, href: `/procurement/purchase-requests/${p.id}` });
+    }
+    for (const r of (rfqsSearch as { data: Array<{id: string; rfq_number: string; title: string; status: string}> }).data ?? []) {
+      hits.push({ kind: "RFQ", number: r.rfq_number, title: r.title, status: r.status, href: `/procurement/rfqs/${r.id}` });
+    }
+    for (const p of (posSearch as { data: Array<{id: string; po_number: string; status: string}> }).data ?? []) {
+      hits.push({ kind: "PO", number: p.po_number, title: "أمر شراء", status: p.status, href: `/procurement/purchase-orders/${p.id}` });
+    }
+    for (const s of (supplierSearch as { data: Array<{id: string; supplier_code: string; legal_name: string; status: string}> }).data ?? []) {
+      hits.push({ kind: "SUP", number: s.supplier_code, title: s.legal_name, status: s.status, href: `/procurement/suppliers/${s.id}` });
+    }
+    for (const i of (invoiceSearch as { data: Array<{id: string; invoice_number: string; status: string}> }).data ?? []) {
+      hits.push({ kind: "INV", number: i.invoice_number, title: "فاتورة مورد", status: i.status, href: `/finance/supplier-invoices/${i.id}` });
+    }
+    for (const c of (contractsSearch as { data: Array<{id: string; contract_number: string; client_name: string; status: string; project_id: string}> }).data ?? []) {
+      hits.push({ kind: "CON", number: c.contract_number, title: c.client_name, status: c.status, href: `/projects/${c.project_id}/commercial/contract` });
+    }
+    for (const v of (valuationsSearch as { data: Array<{id: string; valuation_number: string; status: string}> }).data ?? []) {
+      hits.push({ kind: "VAL", number: v.valuation_number, title: "مستخلص عميل", status: v.status, href: `/finance/client-valuations/${v.id}` });
+    }
+    for (const ci of (clientInvSearch as { data: Array<{id: string; invoice_number: string; status: string}> }).data ?? []) {
+      hits.push({ kind: "CINV", number: ci.invoice_number, title: "فاتورة عميل", status: ci.status, href: `/finance/client-invoices/${ci.id}` });
+    }
+    for (const vo of (variationsSearch as { data: Array<{id: string; vo_number: string; description: string; status: string}> }).data ?? []) {
+      hits.push({ kind: "VO", number: vo.vo_number, title: vo.description, status: vo.status, href: `/finance/variations/${vo.id}` });
+    }
+    for (const cp of (clientPaySearch as { data: Array<{id: string; reference: string; amount: number; client_invoice_id: string}> }).data ?? []) {
+      hits.push({ kind: "RCP", number: cp.reference, title: `تحصيل ${cp.amount}`, href: `/finance/client-invoices/${cp.client_invoice_id}` });
+    }
   }
 
   const canSearch =
     hasPermission(ctx, "document.read") ||
     hasPermission(ctx, "document_control.read") ||
     hasPermission(ctx, "engineering.read") ||
-    hasPermission(ctx, "rfi.read");
+    hasPermission(ctx, "rfi.read") ||
+    hasPermission(ctx, "purchase_request.read") ||
+    hasPermission(ctx, "rfq.read") ||
+    hasPermission(ctx, "purchase_order.read") ||
+    hasPermission(ctx, "supplier.read") ||
+    hasPermission(ctx, "supplier_invoice.read") ||
+    hasPermission(ctx, "finance.read") ||
+    hasPermission(ctx, "client_valuation.read") ||
+    hasPermission(ctx, "client_invoice.read") ||
+    hasPermission(ctx, "variation.read");
 
   if (!canSearch) redirect("/");
 
   return (
     <div>
-      <PageHeader title="بحث الوثائق" description="بحث من جانب قاعدة البيانات بالأرقام والعناوين" />
+      <PageHeader title="بحث موحّد" description="PR, RFQ, PO, مورد، فاتورة، وثائق هندسية — بحث من قاعدة البيانات" />
       <Card className="mb-6">
         <form className="flex flex-wrap gap-3">
           <Field label="رقم الوثيقة / العنوان">

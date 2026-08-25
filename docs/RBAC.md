@@ -36,6 +36,14 @@ Added resource families: `engineering.*`, `document_control.*`, `rfi.*`, `submit
 
 **Viewer** no longer receives every `*.read` key — only a limited Phase 1 read set.
 
+## Phase 3 permissions
+
+Added: `supplier.*`, `procurement.*`, `purchase_request.*`, `rfq.*`, `quotation.*`, `purchase_order.*`, `goods_receipt.*`, `supplier_invoice.*`, `supplier_payment.*`, `project_budget.*`, `finance.*`, `client_valuation.*`, `client_invoice.*`, `client_payment.*`, `variation.*`, `commercial_reports.read`.
+
+Migration `042_phase3_rbac.sql` seeds role mappings. **Engineer** gets PR create/read and goods receipt create — not `finance.read`. **Finance officer** gets finance/supplier invoice/payment keys.
+
+See `FINANCIAL_SECURITY.md`.
+
 ## Contextual access
 
 Architecture supports project-scoped grants so a Project Manager can later be limited to assigned projects. Phase 2 RLS allows access when the user has `project.read_all`, is project manager, has an active `project_members` entry, or a project-scoped `user_roles` grant (`can_access_project`).

@@ -40,6 +40,13 @@ Typed errors (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`, `Confl
 - Issued transmittals and their items are immutable via BEFORE triggers (migration **030**). Authenticated updates raise; service-role may bypass for ops/fixture cleanup only.
 - Shop drawing “approved for execution” requires official decision A/B and non-superseded status.
 
+## Phase 3 notes
+
+- Commercial/finance tables use RLS + `has_project_permission` (migration **043**).
+- Supplier bank details via `get_supplier_banking` RPC — not generic list queries.
+- Issued PO immutability (migration **036**); payment over-invoice blocked in `record_supplier_payment` (**044**).
+- `compute_project_commercial_summary` requires `finance.read` or `commercial_reports.read` in addition to project access.
+
 ## Checklist (Phase 1)
 
 - [x] No service role in client bundles

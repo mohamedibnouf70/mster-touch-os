@@ -2,21 +2,25 @@
 
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { ValidationError } from "@/lib/errors";
 import { getServerEnv } from "@/lib/env";
 import { bootstrapAdminIfNeeded } from "@/server/use-cases/platform";
 
-export async function signInAction(formData: FormData) {
+export type SignInState = { error: string | null };
+
+export async function signInAction(
+  _prev: SignInState,
+  formData: FormData,
+): Promise<SignInState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   if (!email || !password) {
-    throw new ValidationError("أدخل البريد وكلمة المرور.", "Enter email and password.");
+    return { error: "أدخل البريد وكلمة المرور." };
   }
 
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
-    throw new ValidationError("بيانات الدخول غير صحيحة.", "Invalid sign-in details.");
+    return { error: "بيانات الدخول غير صحيحة." };
   }
 
   const env = getServerEnv();
