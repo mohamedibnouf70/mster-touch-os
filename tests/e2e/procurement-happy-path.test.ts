@@ -21,6 +21,7 @@ import {
   createE2EFixture,
   expectPageMarker,
   requireData,
+  serializeSupabaseError,
   signInApiClient,
   signInViaUI,
   type E2EFixture,
@@ -141,18 +142,47 @@ test.describe("Procurement Happy Path", () => {
     const future = new Date();
     future.setDate(future.getDate() + 14);
     await page.fill('[name="responseDueDate"]', future.toISOString().slice(0, 10));
-    await page.locator('form').filter({ has: page.locator('[name="responseDueDate"]') }).locator('button[type="submit"]').click();
+
+    const form = page.locator("form").filter({ has: page.locator('[name="responseDueDate"]') });
+    const submit = form.locator('button[type="submit"]');
+    // Wait for the Server Action POST to finish — do not poll blindly while the action is in-flight.
+    await Promise.all([
+      page.waitForResponse(
+        (res) => {
+          const req = res.request();
+          return req.method() === "POST" && Boolean(req.headers()["next-action"]);
+        },
+        { timeout: 90_000 },
+      ),
+      submit.click(),
+    ]);
 
     const admin = adminClient();
-    await expect.poll(async () => {
-      const { data } = await admin
-        .from("rfqs")
-        .select("id, status")
-        .eq("organization_id", fx.orgId)
-        .eq("purchase_request_id", prId)
-        .maybeSingle();
-      return data?.status ?? null;
-    }).toBe("draft");
+    await expect
+      .poll(
+        async () => {
+          const { data, error } = await admin
+            .from("rfqs")
+            .select("id, status")
+            .eq("organization_id", fx.orgId)
+            .eq("purchase_request_id", prId)
+            .maybeSingle();
+          if (error) {
+            return `error:${error.code ?? ""}:${error.message ?? serializeSupabaseError(error)}`;
+          }
+          if (!data) {
+            const { data: pr } = await admin
+              .from("purchase_requests")
+              .select("status")
+              .eq("id", prId)
+              .maybeSingle();
+            return `missing:pr_status=${pr?.status ?? "null"}`;
+          }
+          return data.status;
+        },
+        { intervals: [250, 500, 1000] },
+      )
+      .toBe("draft");
 
     const rfq = await requireData(
       admin

@@ -44,15 +44,22 @@ const financeSubLinks = [
   { href: "/finance/receivables", label: "ذمم العملاء" },
 ];
 
-const later = [
-  { label: "الموارد البشرية" },
-  { label: "الجودة والسلامة" },
-  { label: "الذكاء الاصطناعي" },
-];
+const later = [{ label: "الجودة والسلامة" }, { label: "الذكاء الاصطناعي" }];
 
-export function Sidebar() {
+export function Sidebar({
+  canEmployees = true,
+  canDepartments = true,
+}: {
+  canEmployees?: boolean;
+  canDepartments?: boolean;
+}) {
   const pathname = usePathname();
   const onFinance = pathname.startsWith("/finance");
+  const links = primary.filter((item) => {
+    if (item.href === "/employees") return canEmployees;
+    if (item.href === "/departments") return canDepartments;
+    return true;
+  });
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-l border-white/10 bg-navy text-white">
@@ -61,7 +68,7 @@ export function Sidebar() {
         <h1 className="mt-1 text-lg font-semibold">نظام التشغيل</h1>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {primary.map((item) => {
+        {links.map((item) => {
           const Icon = item.icon;
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const isFinance = item.href === "/finance";

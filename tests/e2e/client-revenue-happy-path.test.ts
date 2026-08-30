@@ -52,7 +52,16 @@ test.describe("Client Revenue Happy Path", () => {
     await page.getByTestId("contract-number").fill(`CON-E2E-${fx.runId}`);
     await page.getByTestId("contract-value").fill(String(CONTRACT_VALUE));
     await page.locator('[name="retentionPercent"]').fill("0");
-    await page.getByTestId("contract-create-submit").click();
+    await Promise.all([
+      page.waitForResponse(
+        (res) => {
+          const req = res.request();
+          return req.method() === "POST" && Boolean(req.headers()["next-action"]);
+        },
+        { timeout: 90_000 },
+      ),
+      page.getByTestId("contract-create-submit").click(),
+    ]);
 
     const admin = adminClient();
     await expect

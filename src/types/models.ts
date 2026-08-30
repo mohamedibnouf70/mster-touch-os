@@ -3,7 +3,9 @@ import type { RoleScopeType } from "@/lib/permissions/evaluate";
 import type {
   ConfidentialityLevel,
   DocumentStatus,
+  EmployeeGender,
   EmploymentStatus,
+  EmploymentType,
   Locale,
   MembershipStatus,
   NotificationPriority,
@@ -66,6 +68,9 @@ export type Employee = {
   job_title_ar: string | null;
   job_title_en: string | null;
   employment_status: EmploymentStatus;
+  employment_type: EmploymentType | null;
+  date_of_birth: string | null;
+  gender: EmployeeGender | null;
   joining_date: string | null;
   contract_start: string | null;
   contract_end: string | null;
@@ -75,6 +80,85 @@ export type Employee = {
   nationality: string | null;
   is_active: boolean;
   terminated_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmployeeContract = {
+  id: string;
+  organization_id: string;
+  employee_id: string;
+  contract_number: string;
+  contract_type: EmploymentType;
+  status: import("@/types/enums").EmployeeContractStatus;
+  start_date: string;
+  end_date: string | null;
+  probation_end_date: string | null;
+  notice_period_days: number;
+  working_hours_per_week: number;
+  currency: string;
+  initial_basic_salary: number | null;
+  initial_housing_allowance: number;
+  initial_transport_allowance: number;
+  initial_other_allowances: number;
+  signed_document_id: string | null;
+  is_current: boolean;
+  notes: string | null;
+  created_by: string;
+  activated_at: string | null;
+  terminated_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmployeeCompensationVersion = {
+  id: string;
+  organization_id: string;
+  employee_id: string;
+  effective_from: string;
+  effective_to: string | null;
+  currency: string;
+  basic_salary: number;
+  housing_allowance: number;
+  transport_allowance: number;
+  other_allowances: number;
+  total_salary?: number;
+  change_reason: string | null;
+  status: import("@/types/enums").CompensationVersionStatus;
+  created_by: string;
+  approved_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmployeeDocument = {
+  id: string;
+  organization_id: string;
+  employee_id: string;
+  document_id: string;
+  category: import("@/types/enums").EmployeeDocumentCategory;
+  visibility_scope: import("@/types/enums").HrDocumentVisibility;
+  document_number: string | null;
+  issue_date: string | null;
+  expiry_date: string | null;
+  notes: string | null;
+  uploaded_by: string;
+  created_at: string;
+  updated_at: string;
+  documents?: DocumentRecord | null;
+};
+
+export type EmployeeBankAccount = {
+  id: string;
+  organization_id: string;
+  employee_id: string;
+  bank_name: string;
+  iban: string | null;
+  masked_iban: string;
+  account_name: string;
+  swift_code: string | null;
+  is_primary: boolean;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 };

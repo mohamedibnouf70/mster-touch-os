@@ -8,12 +8,17 @@ import type {
   Department,
   DocumentRecord,
   Employee,
+  EmployeeBankAccount,
+  EmployeeCompensationVersion,
+  EmployeeContract,
+  EmployeeDocument,
   NotificationRecord,
   PendingAction,
   Profile,
   Project,
   ProjectStage,
 } from "@/types/models";
+import { EMPLOYEE_DETAIL_COLUMNS, EMPLOYEE_DIRECTORY_COLUMNS } from "@/lib/hr/labels";
 
 function fail(error: { message?: string } | null): never {
   throw new DatabaseError(error);
@@ -35,23 +40,149 @@ export class CoreRepository {
   async listEmployees(organizationId: string): Promise<Array<Employee & { profiles: Profile | null }>> {
     const { data, error } = await this.supabase
       .from("employees")
-      .select("*, profiles(*)")
+      .select(`${EMPLOYEE_DIRECTORY_COLUMNS}, profiles(id, full_name_ar, full_name_en, phone, locale, is_active, avatar_path, last_seen_at, created_at, updated_at)`)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(200);
     if (error) fail(error);
-    return (data ?? []) as Array<Employee & { profiles: Profile | null }>;
+    return (data ?? []) as unknown as Array<Employee & { profiles: Profile | null }>;
   }
 
-  async getEmployee(organizationId: string, employeeId: string) {
+  async getEmployeeDirectoryRow(organizationId: string, employeeId: string) {
     const { data, error } = await this.supabase
       .from("employees")
-      .select("*, profiles(*), employee_departments(*, departments(*)), employee_project_assignments(*)")
+      .select(
+        `${EMPLOYEE_DETAIL_COLUMNS}, profiles(id, full_name_ar, full_name_en, phone, locale, is_active, avatar_path, last_seen_at, created_at, updated_at), employee_departments(id, is_primary, department_id, departments(id, code, name_ar, name_en, is_active))`,
+      )
       .eq("organization_id", organizationId)
       .eq("id", employeeId)
       .maybeSingle();
     if (error) fail(error);
     return data;
+  }
+
+  async getEmployee(organizationId: string, employeeId: string) {
+    return this.getEmployeeDirectoryRow(organizationId, employeeId);
+  }
+
+  async getEmployeeCompliance(organizationId: string, employeeId: string) {
+    const { data, error } = await this.supabase
+      .from("employee_compliance")
+      .select(
+        "id, organization_id, employee_id, iqama_number, iqama_expiry, passport_number, passport_expiry, work_permit_expiry, insurance_provider, insurance_expiry, gosi_number, created_at, updated_at",
+      )
+      .eq("organization_id", organizationId)
+      .eq("employee_id", employeeId)
+      .maybeSingle();
+    if (error) fail(error);
+    return data;
+  }
+
+  async listEmployeeProjects(organizationId: string, profileId: string) {
+    const { data, error } = await this.supabase
+      .from("project_members")
+      .select("id, role_label, is_active, assigned_at, unassigned_at, projects(id, project_code, name_ar, name_en, status)")
+      .eq("organization_id", organizationId)
+      .eq("profile_id", profileId)
+      .eq("is_active", true)
+      .order("assigned_at", { ascending: false });
+    if (error) fail(error);
+    return data ?? [];
+  }
+
+  async listEmployeeAudit(organizationId: string, employeeId: string, limit = 30) {
+    const { data, error } = await this.supabase
+      .from("audit_logs")
+      .select("id, action, entity_type, entity_id, created_at, actor_id")
+      .eq("organization_id", organizationId)
+      .eq("entity_type", "employee")
+      .eq("entity_id", employeeId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) fail(error);
+    return data ?? [];
+  }
+
+  async listEmployeeContracts(organizationId: string, employeeId: string): Promise<EmployeeContract[]> {
+    const { data, error } = await this.supabase
+      .from("employee_contracts")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("employee_id", employeeId)
+      .order("created_at", { ascending: false });
+    if (error) fail(error);
+    return (data ?? []) as EmployeeContract[];
+  }
+
+  async getCurrentEmployeeContract(organizationId: string, employeeId: string): Promise<EmployeeContract | null> {
+    const { data, error } = await this.supabase
+      .from("employee_contracts")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("employee_id", employeeId)
+      .eq("is_current", true)
+      .maybeSingle();
+    if (error) fail(error);
+    return data as EmployeeContract | null;
+  }
+
+  async listEmployeeCompensationVersions(organizationId: string, employeeId: string): Promise<EmployeeCompensationVersion[]> {
+    const { data, error } = await this.supabase
+      .from("employee_compensation_versions")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("employee_id", employeeId)
+      .order("effective_from", { ascending: false });
+    if (error) fail(error);
+    return (data ?? []) as EmployeeCompensationVersion[];
+  }
+
+  async getCurrentEmployeeCompensation(organizationId: string, employeeId: string): Promise<EmployeeCompensationVersion | null> {
+    const { data, error } = await this.supabase
+      .from("employee_compensation_versions")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("employee_id", employeeId)
+      .eq("status", "active")
+      .is("effective_to", null)
+      .order("effective_from", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) fail(error);
+    return data as EmployeeCompensationVersion | null;
+  }
+
+  async listEmployeeDocuments(organizationId: string, employeeId: string): Promise<EmployeeDocument[]> {
+    const { data, error } = await this.supabase
+      .from("employee_documents")
+      .select("*, documents(*, document_versions(*))")
+      .eq("organization_id", organizationId)
+      .eq("employee_id", employeeId)
+      .order("created_at", { ascending: false });
+    if (error) fail(error);
+    return (data ?? []) as unknown as EmployeeDocument[];
+  }
+
+  async listEmployeeBankAccounts(organizationId: string, employeeId: string): Promise<EmployeeBankAccount[]> {
+    const { data, error } = await this.supabase.rpc("get_employee_banking", {
+      p_employee_id: employeeId,
+    });
+    if (error) fail(error);
+    return (data ?? []) as EmployeeBankAccount[];
+  }
+
+  async employeeDirectoryStats(organizationId: string) {
+    const { data, error } = await this.supabase
+      .from("employees")
+      .select("id, is_active, employment_status")
+      .eq("organization_id", organizationId);
+    if (error) fail(error);
+    const rows = data ?? [];
+    return {
+      total: rows.length,
+      active: rows.filter((r) => r.is_active).length,
+      probation: rows.filter((r) => r.employment_status === "probation").length,
+    };
   }
 
   async listProjects(input: {

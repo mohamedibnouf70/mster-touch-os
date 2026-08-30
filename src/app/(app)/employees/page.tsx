@@ -1,58 +1,106 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui/primitives";
 import { getAuthContext } from "@/server/context";
 import { hasPermission } from "@/server/policies/authorize";
 import { CoreRepository } from "@/server/repositories/core.repository";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import {
-  assignDepartmentAction,
-  assignRoleAction,
-  createUserAction,
-  setUserActiveAction,
-} from "@/server/use-cases/platform";
+import { createEmployeeAction } from "@/server/use-cases/hr";
+import { EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_TYPE_LABELS, EMPLOYMENT_TYPES } from "@/lib/hr/labels";
+import type { EmploymentStatus, EmploymentType } from "@/types/enums";
 
 type RoleRow = { id: string; name_ar: string; is_external?: boolean };
 
 export default async function EmployeesPage() {
   const ctx = await getAuthContext();
-  if (!ctx || !hasPermission(ctx, "employee.read")) redirect("/login");
+  if (!ctx) redirect("/login");
+
+  const canHrDirectory =
+    hasPermission(ctx, "employee.read") ||
+    hasPermission(ctx, "employee.manage") ||
+    hasPermission(ctx, "employee.create");
+  const canDeptManagerDirectory = hasPermission(ctx, "department.update");
+  if (!canHrDirectory && !canDeptManagerDirectory) {
+    if (ctx.employee?.id) redirect(`/employees/${ctx.employee.id}`);
+    redirect("/");
+  }
 
   const supabase = await createServerSupabaseClient();
   const repo = new CoreRepository(supabase);
-  const [employees, departments, roles, users] = await Promise.all([
+  const [employees, departments, roles] = await Promise.all([
     repo.listEmployees(ctx.organization.id),
     repo.listDepartments(ctx.organization.id),
-    repo.listRoles(),
-    repo.listUsers(ctx.organization.id),
+    canHrDirectory ? repo.listRoles() : Promise.resolve([]),
   ]);
 
+  const stats = canHrDirectory
+    ? await repo.employeeDirectoryStats(ctx.organization.id)
+    : {
+        total: employees.length,
+        active: employees.filter((e) => e.is_active).length,
+        probation: employees.filter((e) => e.employment_status === "probation").length,
+      };
+
   const roleRows = roles as RoleRow[];
-  const canManage = hasPermission(ctx, "employee.manage") || hasPermission(ctx, "user.create");
+  const canCreate = hasPermission(ctx, "employee.create") || hasPermission(ctx, "user.create");
   const canAssignRole = hasPermission(ctx, "role.assign");
-  const canDisable = hasPermission(ctx, "user.disable");
 
   return (
-    <div>
-      <PageHeader title="الموظفون" description="إدارة الهوية الوظيفية والأدوار والإدارات دون حذف السجل التاريخي" />
+    <div data-testid="employees-page">
+      <PageHeader
+        title="الموظفون"
+        description="سجل الموظفين التشغيلي — بدون رواتب أو بيانات بنكية في الدليل العام"
+      />
 
-      {canManage ? (
-        <Card className="mb-6">
-          <h2 className="mb-4 text-base font-semibold text-navy">إنشاء مستخدم / موظف</h2>
-          <form action={createUserAction} className="grid gap-3 md:grid-cols-2">
+      <div className="mb-6 grid gap-3 md:grid-cols-3" data-testid="employees-stats">
+        <Card>
+          <p className="text-sm text-muted">إجمالي السجلات</p>
+          <p className="mt-1 text-2xl font-semibold text-navy">{stats.total}</p>
+        </Card>
+        <Card>
+          <p className="text-sm text-muted">نشطون</p>
+          <p className="mt-1 text-2xl font-semibold text-success">{stats.active}</p>
+        </Card>
+        <Card>
+          <p className="text-sm text-muted">تحت التجربة</p>
+          <p className="mt-1 text-2xl font-semibold text-navy">{stats.probation}</p>
+        </Card>
+      </div>
+
+      {canCreate ? (
+        <Card className="mb-6" data-testid="employee-create-card">
+          <h2 className="mb-4 text-base font-semibold text-navy">توظيف موظف جديد</h2>
+          <p className="mb-4 text-sm text-muted">
+            يتطلب صلاحية إنشاء موظف. تعيين الأدوار يتطلب صلاحية منفصلة.
+          </p>
+          <form action={createEmployeeAction} className="grid gap-3 md:grid-cols-2">
             <Field label="البريد">
-              <Input name="email" type="email" required />
+              <Input name="email" type="email" required data-testid="employee-create-email" />
+            </Field>
+            <Field label="رقم الموظف">
+              <Input name="employee_number" data-testid="employee-create-number" />
             </Field>
             <Field label="الاسم بالعربية">
-              <Input name="full_name_ar" required />
+              <Input name="full_name_ar" required data-testid="employee-create-name-ar" />
             </Field>
             <Field label="الاسم بالإنجليزية">
-              <Input name="full_name_en" required />
+              <Input name="full_name_en" required data-testid="employee-create-name-en" />
             </Field>
             <Field label="المسمى الوظيفي">
-              <Input name="job_title_ar" />
+              <Input name="job_title_ar" data-testid="employee-create-title" />
+            </Field>
+            <Field label="نوع التوظيف">
+              <Select name="employment_type" defaultValue="" data-testid="employee-create-type">
+                <option value="">غير محدد</option>
+                {EMPLOYMENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {EMPLOYMENT_TYPE_LABELS[t].ar}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <Field label="الإدارة">
-              <Select name="department_id" defaultValue="">
+              <Select name="department_id" defaultValue="" data-testid="employee-create-department">
                 <option value="">بدون</option>
                 {departments.map((department) => (
                   <option key={department.id} value={department.id}>
@@ -61,20 +109,33 @@ export default async function EmployeesPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="الدور">
-              <Select name="role_id" defaultValue="">
-                <option value="">بدون</option>
-                {roleRows
-                  .filter((role) => !role.is_external)
-                  .map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name_ar}
-                    </option>
-                  ))}
-              </Select>
+            {canAssignRole ? (
+              <Field label="الدور">
+                <Select name="role_id" defaultValue="" data-testid="employee-create-role">
+                  <option value="">بدون</option>
+                  {roleRows
+                    .filter((role) => !role.is_external)
+                    .map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name_ar}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+            ) : null}
+            <Field label="الجنسية">
+              <Input name="nationality" />
+            </Field>
+            <Field label="موقع العمل">
+              <Input name="work_location" />
+            </Field>
+            <Field label="تاريخ الالتحاق">
+              <Input name="joining_date" type="date" />
             </Field>
             <div className="md:col-span-2">
-              <Button type="submit">إنشاء</Button>
+              <Button type="submit" data-testid="employee-create-submit">
+                إنشاء الموظف
+              </Button>
             </div>
           </form>
         </Card>
@@ -83,84 +144,34 @@ export default async function EmployeesPage() {
       {employees.length === 0 ? (
         <EmptyState title="لا يوجد موظفون بعد." />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3" data-testid="employees-list">
           {employees.map((employee) => {
             const profile = employee.profiles;
-            const member = users.find((row) => {
-              const typed = row as { profile_id?: string; profiles?: { id?: string } };
-              return typed.profile_id === employee.profile_id || typed.profiles?.id === employee.profile_id;
-            }) as { profiles?: { is_active?: boolean } } | undefined;
-            const active = member?.profiles?.is_active ?? profile?.is_active ?? employee.is_active;
-
+            const status = employee.employment_status as EmploymentStatus;
+            const empType = employee.employment_type as EmploymentType | null;
             return (
-              <Card key={employee.id}>
+              <Card key={employee.id} data-testid={`employee-row-${employee.id}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-base font-semibold text-navy">
+                    <Link
+                      href={`/employees/${employee.id}`}
+                      className="text-base font-semibold text-navy underline-offset-2 hover:underline"
+                      data-testid={`employee-link-${employee.id}`}
+                    >
                       {profile?.full_name_ar || "بدون اسم"}
-                    </h2>
+                    </Link>
                     <p className="text-sm text-muted">
-                      {employee.job_title_ar || "بدون مسمى"} · {employee.employment_status}
+                      {employee.employee_number ? `${employee.employee_number} · ` : ""}
+                      {employee.job_title_ar || "بدون مسمى"}
+                      {empType ? ` · ${EMPLOYMENT_TYPE_LABELS[empType].ar}` : ""}
                     </p>
                   </div>
-                  <Badge tone={active ? "success" : "danger"}>{active ? "نشط" : "موقوف"}</Badge>
-                </div>
-
-                <div className="mt-4 grid gap-3 border-t border-line pt-4 md:grid-cols-3">
-                  {hasPermission(ctx, "employee.manage") ? (
-                    <form action={assignDepartmentAction} className="space-y-2">
-                      <input type="hidden" name="employeeId" value={employee.id} />
-                      <Field label="تعيين إدارة">
-                        <Select name="departmentId" required defaultValue="">
-                          <option value="" disabled>
-                            اختر
-                          </option>
-                          {departments.map((department) => (
-                            <option key={department.id} value={department.id}>
-                              {department.name_ar}
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
-                      <Button type="submit" variant="secondary">
-                        حفظ الإدارة
-                      </Button>
-                    </form>
-                  ) : null}
-
-                  {canAssignRole ? (
-                    <form action={assignRoleAction} className="space-y-2">
-                      <input type="hidden" name="profileId" value={employee.profile_id} />
-                      <Field label="تعيين دور">
-                        <Select name="roleId" required defaultValue="">
-                          <option value="" disabled>
-                            اختر
-                          </option>
-                          {roleRows
-                            .filter((role) => !role.is_external)
-                            .map((role) => (
-                              <option key={role.id} value={role.id}>
-                                {role.name_ar}
-                              </option>
-                            ))}
-                        </Select>
-                      </Field>
-                      <Button type="submit" variant="secondary">
-                        حفظ الدور
-                      </Button>
-                    </form>
-                  ) : null}
-
-                  {canDisable ? (
-                    <form action={setUserActiveAction} className="space-y-2">
-                      <input type="hidden" name="profileId" value={employee.profile_id} />
-                      <input type="hidden" name="isActive" value={active ? "false" : "true"} />
-                      <p className="text-sm text-muted">إيقاف الوصول يحافظ على السجل التاريخي.</p>
-                      <Button type="submit" variant={active ? "danger" : "primary"}>
-                        {active ? "إيقاف الوصول" : "إعادة التفعيل"}
-                      </Button>
-                    </form>
-                  ) : null}
+                  <div className="flex gap-2">
+                    <Badge tone={employee.is_active ? "success" : "danger"}>
+                      {employee.is_active ? "نشط" : "موقوف"}
+                    </Badge>
+                    <Badge tone="neutral">{EMPLOYMENT_STATUS_LABELS[status]?.ar ?? status}</Badge>
+                  </div>
                 </div>
               </Card>
             );

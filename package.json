@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "verify:schema": "npx tsx scripts/verify-schema.ts",
     "db:apply-phase2": "npx tsx scripts/apply-phase2-migrations.ts",
-    "test:e2e": "playwright test tests/e2e"
+    "test:e2e": "npm run build && playwright test tests/e2e"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

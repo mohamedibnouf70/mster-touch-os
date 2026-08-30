@@ -256,6 +256,25 @@ export default async function SearchPage({
     for (const cp of (clientPaySearch as { data: Array<{id: string; reference: string; amount: number; client_invoice_id: string}> }).data ?? []) {
       hits.push({ kind: "RCP", number: cp.reference, title: `تحصيل ${cp.amount}`, href: `/finance/client-invoices/${cp.client_invoice_id}` });
     }
+
+    if (hasPermission(ctx, "employee.read")) {
+      const { data: empHits } = await supabase
+        .from("employees")
+        .select("id, employee_number, job_title_ar, work_location, profiles(full_name_ar, full_name_en)")
+        .eq("organization_id", ctx.organization.id)
+        .or(`employee_number.ilike.${pattern},job_title_ar.ilike.${pattern},work_location.ilike.${pattern}`)
+        .limit(15);
+      for (const e of empHits ?? []) {
+        const p = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+        const name = (p as { full_name_ar?: string } | null)?.full_name_ar ?? e.employee_number ?? e.id;
+        hits.push({
+          kind: "EMP",
+          number: e.employee_number ?? e.id.slice(0, 8),
+          title: `${name}${e.job_title_ar ? ` — ${e.job_title_ar}` : ""}`,
+          href: `/employees/${e.id}`,
+        });
+      }
+    }
   }
 
   const canSearch =
@@ -271,7 +290,8 @@ export default async function SearchPage({
     hasPermission(ctx, "finance.read") ||
     hasPermission(ctx, "client_valuation.read") ||
     hasPermission(ctx, "client_invoice.read") ||
-    hasPermission(ctx, "variation.read");
+    hasPermission(ctx, "variation.read") ||
+    hasPermission(ctx, "employee.read");
 
   if (!canSearch) redirect("/");
 

@@ -12,22 +12,62 @@ type PostgrestLikeError = {
   code?: string;
   details?: string;
   hint?: string;
+  name?: string;
+  status?: number;
+  statusCode?: number;
 } | null;
+
+/** Serialize Supabase/PostgREST/fetch failures that sometimes omit message. */
+export function serializeSupabaseError(error: unknown): string {
+  if (error == null) return "null error";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) {
+    const cause =
+      "cause" in error && error.cause != null ? ` cause=${serializeSupabaseError(error.cause)}` : "";
+    return `${error.name}: ${error.message || "(empty message)"}${cause}`;
+  }
+  if (typeof error === "object") {
+    const e = error as Record<string, unknown>;
+    const parts = [e.name, e.code, e.message, e.details, e.hint, e.status, e.statusCode]
+      .filter((v) => v != null && String(v).trim() !== "")
+      .map(String);
+    if (parts.length > 0) return parts.join(" ");
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return Object.prototype.toString.call(error);
+    }
+  }
+  return String(error);
+}
 
 export async function requireData<T>(
   operation: PromiseLike<{ data: T; error: PostgrestLikeError }>,
   label: string,
 ): Promise<Exclude<T, null | undefined>> {
-  const { data, error } = await operation;
+  let data: T;
+  let error: PostgrestLikeError;
+  try {
+    ({ data, error } = await operation);
+  } catch (thrown) {
+    throw new Error(`${label}: thrown ${serializeSupabaseError(thrown)}`);
+  }
   if (error) {
-    throw new Error(
-      `${label}: ${error.code ?? ""} ${error.message ?? "unknown error"} ${error.details ?? ""} ${error.hint ?? ""}`.trim(),
-    );
+    throw new Error(`${label}: ${serializeSupabaseError(error)}`);
   }
   if (data == null) {
     throw new Error(`${label}: returned no data`);
   }
   return data as Exclude<T, null | undefined>;
+}
+
+/**
+ * Navigate without waiting for full `load` (HMR/dev can keep load open or abort it).
+ * Prefer relative paths so Playwright baseURL applies.
+ */
+export async function gotoApp(page: Page, path: string) {
+  const url = path.startsWith("http") ? path : path;
+  await page.goto(url, { waitUntil: "domcontentloaded" });
 }
 
 export function adminClient(): SupabaseClient {
@@ -320,7 +360,24 @@ export async function assertAuthenticatedPage(page: Page, expectedNamePart?: str
 }
 
 export async function signInViaUI(page: Page, email: string, password: string, expectedNamePart?: string) {
-  await page.goto("/login");
+  await gotoApp(page, "/login");
+
+  const existingLogout = page.getByRole("button", { name: "خروج" });
+  if (await existingLogout.isVisible().catch(() => false)) {
+    if (expectedNamePart) {
+      const shellText = await page.locator("header").innerText().catch(() => "");
+      if (shellText.includes(expectedNamePart)) {
+        await assertAuthenticatedPage(page, expectedNamePart);
+        return;
+      }
+    }
+    await Promise.all([
+      page.waitForURL(/\/login/, { timeout: 30_000 }).catch(() => null),
+      existingLogout.click(),
+    ]);
+    await gotoApp(page, "/login");
+  }
+
   await page.waitForSelector('form button[type="submit"]', { state: "visible" });
   await page.locator('[name="email"]').fill(email);
   await page.locator('[name="password"]').fill(password);
@@ -339,6 +396,11 @@ export async function signInViaUI(page: Page, email: string, password: string, e
     const url = page.url();
     const body = (await page.locator("body").innerText().catch(() => "")).slice(0, 800);
     throw new Error(`UI sign-in failed for ${email}: timeout:${url}:${body}`);
+  }
+
+  if (await logout.isVisible().catch(() => false)) {
+    await assertAuthenticatedPage(page, expectedNamePart);
+    return;
   }
 
   if (await loginError.isVisible().catch(() => false)) {
