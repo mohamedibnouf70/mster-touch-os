@@ -310,14 +310,37 @@ export class CoreRepository {
   }
 
   async listUsers(organizationId: string) {
-    const { data, error } = await this.supabase
+    // No FK exists between organization_members and employees (both point at profiles).
+    // PostgREST cannot embed employees(*) from organization_members (PGRST200).
+    const { data: members, error } = await this.supabase
       .from("organization_members")
-      .select("*, profiles(*), employees(*)")
+      .select("*, profiles(*)")
       .eq("organization_id", organizationId)
       .order("joined_at", { ascending: false })
       .limit(100);
     if (error) fail(error);
-    return data ?? [];
+    if (!members?.length) return [];
+
+    const profileIds = members.map((m) => m.profile_id as string);
+    const { data: employees, error: empError } = await this.supabase
+      .from("employees")
+      .select("id, profile_id, job_title_ar, job_title_en, employment_status, is_active")
+      .eq("organization_id", organizationId)
+      .in("profile_id", profileIds);
+    if (empError) fail(empError);
+
+    const employeesByProfile = new Map<string, NonNullable<typeof employees>>();
+    for (const emp of employees ?? []) {
+      const key = emp.profile_id as string;
+      const list = employeesByProfile.get(key) ?? [];
+      list.push(emp);
+      employeesByProfile.set(key, list);
+    }
+
+    return members.map((member) => ({
+      ...member,
+      employees: employeesByProfile.get(member.profile_id as string) ?? [],
+    }));
   }
 
   async listRoles() {
