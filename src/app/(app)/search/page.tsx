@@ -322,32 +322,34 @@ export default async function SearchPage({
         <EmptyState title="لا توجد نتائج ضمن نطاق صلاحياتك." />
       ) : (
         <Card className="p-0">
-          <table className="w-full text-sm">
-            <thead className="bg-paper text-muted">
-              <tr>
-                <th className="px-4 py-3 text-right">النوع</th>
-                <th className="px-4 py-3 text-right">الرقم</th>
-                <th className="px-4 py-3 text-right">العنوان</th>
-                <th className="px-4 py-3 text-right">الحالة</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hits.map((hit, idx) => (
-                <tr key={`${hit.kind}-${hit.number}-${idx}`} className="border-t border-line">
-                  <td className="px-4 py-3">
-                    <Badge tone="navy">{hit.kind}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={hit.href} className="font-medium text-navy underline">
-                      {hit.number}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">{hit.title}</td>
-                  <td className="px-4 py-3 text-muted">{hit.status ?? "—"}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="bg-paper text-muted">
+                <tr>
+                  <th className="px-4 py-3 text-right">النوع</th>
+                  <th className="px-4 py-3 text-right">الرقم</th>
+                  <th className="px-4 py-3 text-right">العنوان</th>
+                  <th className="px-4 py-3 text-right">الحالة</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {hits.map((hit, idx) => (
+                  <tr key={`${hit.kind}-${hit.number}-${idx}`} className="border-t border-line">
+                    <td className="px-4 py-3">
+                      <Badge tone="navy">{hit.kind}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link href={hit.href} className="font-medium text-navy underline">
+                        {hit.number}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">{hit.title}</td>
+                    <td className="px-4 py-3 text-muted">{hit.status ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
     </div>

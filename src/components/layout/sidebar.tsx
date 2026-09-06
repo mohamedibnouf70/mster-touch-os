@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bell,
@@ -16,6 +17,7 @@ import {
   Wrench,
   ShoppingCart,
   Wallet,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -49,25 +51,56 @@ const later = [{ label: "الجودة والسلامة" }, { label: "الذكا�
 export function Sidebar({
   canEmployees = true,
   canDepartments = true,
+  open = false,
+  onClose,
 }: {
   canEmployees?: boolean;
   canDepartments?: boolean;
+  open?: boolean;
+  onClose?: () => void;
 }) {
   const pathname = usePathname();
   const onFinance = pathname.startsWith("/finance");
+  const [isDesktop, setIsDesktop] = useState(false);
   const links = primary.filter((item) => {
     if (item.href === "/employees") return canEmployees;
     if (item.href === "/departments") return canDepartments;
     return true;
   });
 
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-l border-white/10 bg-navy text-white">
-      <div className="border-b border-white/10 px-5 py-5">
-        <p className="text-[11px] font-semibold tracking-[0.22em] text-bronze">MASTER TOUCH</p>
-        <h1 className="mt-1 text-lg font-semibold">نظام التشغيل</h1>
+    <aside
+      id="app-sidebar"
+      aria-hidden={isDesktop ? false : !open}
+      className={cn(
+        "flex h-full w-72 shrink-0 flex-col border-l border-white/10 bg-navy text-white",
+        "fixed inset-y-0 start-0 z-50 transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 lg:transition-none",
+        open ? "translate-x-0" : "-translate-x-full rtl:translate-x-full lg:translate-x-0",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold tracking-[0.22em] text-bronze">MASTER TOUCH</p>
+          <h1 className="mt-1 text-lg font-semibold">نظام التشغيل</h1>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-white/80 hover:bg-white/10 lg:hidden"
+          aria-label="إغلاق القائمة"
+          onClick={onClose}
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-4">
         {links.map((item) => {
           const Icon = item.icon;
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
@@ -76,13 +109,14 @@ export function Sidebar({
             <div key={item.href}>
               <Link
                 href={item.href}
+                onClick={onClose}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition",
+                  "flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm transition lg:min-h-0",
                   active ? "bg-white/12 text-white" : "text-white/75 hover:bg-white/8 hover:text-white",
                 )}
               >
-                <Icon className="h-4 w-4" />
-                {item.label}
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{item.label}</span>
               </Link>
               {isFinance && onFinance ? (
                 <div className="me-2 mt-1 space-y-0.5 border-r border-white/10 pe-2">
@@ -92,9 +126,10 @@ export function Sidebar({
                       <Link
                         key={sub.href}
                         href={sub.href}
+                        onClick={onClose}
                         data-testid={`sidebar-${sub.href.replaceAll("/", "-").slice(1)}`}
                         className={cn(
-                          "block rounded-md py-1.5 pe-3 ps-6 text-xs transition",
+                          "block rounded-md py-2 pe-3 ps-6 text-xs transition",
                           subActive ? "bg-white/10 text-white" : "text-white/55 hover:text-white/85",
                         )}
                       >

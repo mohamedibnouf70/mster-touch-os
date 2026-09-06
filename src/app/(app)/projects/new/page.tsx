@@ -65,7 +65,9 @@ export default async function NewProjectPage() {
           <Field label="الموقع">
             <Input name="location" />
           </Field>
-          <Button type="submit">حفظ المشروع</Button>
+          <Button type="submit" className="w-full sm:w-auto">
+            حفظ المشروع
+          </Button>
         </form>
       </Card>
     </div>

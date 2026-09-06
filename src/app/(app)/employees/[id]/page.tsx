@@ -179,13 +179,16 @@ export default async function EmployeeDetailPage({
         ) : null}
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-2 border-b border-line pb-3" data-testid="employee-tabs">
+      <div
+        className="mb-6 flex gap-2 overflow-x-auto overscroll-x-contain border-b border-line pb-3 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-testid="employee-tabs"
+      >
         {tabs.map((t) => (
           <Link
             key={t.id}
             href={`/employees/${id}?tab=${t.id}`}
             data-testid={`employee-tab-${t.id}`}
-            className={`rounded-md px-3 py-1.5 text-sm ${
+            className={`shrink-0 rounded-md px-3 py-2 text-sm ${
               tab === t.id ? "bg-navy text-white" : "bg-paper text-muted hover:text-ink"
             }`}
           >

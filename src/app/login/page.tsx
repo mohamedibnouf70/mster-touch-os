@@ -10,7 +10,7 @@ export default async function LoginPage({
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-xl border border-line bg-white p-8 shadow-sm">
+      <div className="w-full max-w-md rounded-xl border border-line bg-white p-5 shadow-sm sm:p-8">
         <div className="mb-8">
           <p className="text-xs font-semibold tracking-[0.2em] text-bronze">MASTER TOUCH</p>
           <PageHeader title="تسجيل الدخول" description="نظام التشغيل الداخلي للشركة" />

@@ -52,7 +52,7 @@ export default async function EmployeesPage() {
         description="سجل الموظفين التشغيلي — بدون رواتب أو بيانات بنكية في الدليل العام"
       />
 
-      <div className="mb-6 grid gap-3 md:grid-cols-3" data-testid="employees-stats">
+      <div className="mb-6 grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3" data-testid="employees-stats">
         <Card>
           <p className="text-sm text-muted">إجمالي السجلات</p>
           <p className="mt-1 text-2xl font-semibold text-navy">{stats.total}</p>
@@ -133,7 +133,7 @@ export default async function EmployeesPage() {
               <Input name="joining_date" type="date" />
             </Field>
             <div className="md:col-span-2">
-              <Button type="submit" data-testid="employee-create-submit">
+              <Button type="submit" className="w-full sm:w-auto" data-testid="employee-create-submit">
                 إنشاء الموظف
               </Button>
             </div>

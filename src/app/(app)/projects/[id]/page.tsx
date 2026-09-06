@@ -151,18 +151,18 @@ export default async function ProjectDetailPage({
         <Badge tone={healthTone as "danger" | "warning" | "success"}>صحة المشروع: {healthLabel}</Badge>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-2 border-b border-line pb-2">
+      <div className="mb-6 flex gap-2 overflow-x-auto overscroll-x-contain border-b border-line pb-2 whitespace-nowrap">
         {tabs.map((item) => (
           <a
             key={item.id}
             href={`/projects/${project.id}?tab=${item.id}`}
-            className={`rounded-md px-3 py-1.5 text-sm ${tab === item.id ? "bg-navy text-white" : "text-muted hover:bg-white"}`}
+            className={`shrink-0 rounded-md px-3 py-2 text-sm ${tab === item.id ? "bg-navy text-white" : "text-muted hover:bg-white"}`}
           >
             {item.label}
           </a>
         ))}
         {laterTabs.map((item) => (
-          <span key={item} className="rounded-md px-3 py-1.5 text-sm text-muted/50">
+          <span key={item} className="shrink-0 rounded-md px-3 py-2 text-sm text-muted/50">
             {item} · لاحقاً
           </span>
         ))}
@@ -211,47 +211,49 @@ export default async function ProjectDetailPage({
           {stages.length === 0 ? (
             <EmptyState title="لم تُنشأ مراحل لهذا المشروع." />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-paper text-muted">
-                <tr>
-                  <th className="px-4 py-3 text-right">#</th>
-                  <th className="px-4 py-3 text-right">المرحلة</th>
-                  <th className="px-4 py-3 text-right">الحالة</th>
-                  <th className="px-4 py-3 text-right">تحديث</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stages.map((stage) => (
-                  <tr key={stage.id} className="border-t border-line">
-                    <td className="px-4 py-3">{stage.sequence}</td>
-                    <td className="px-4 py-3">
-                      {stage.name_ar}
-                      <p className="text-xs text-muted">{stage.name_en}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge>{stage.status}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      {hasPermission(ctx, "project.update") ? (
-                        <form action={updateProjectStageAction} className="flex gap-2">
-                          <input type="hidden" name="stageId" value={stage.id} />
-                          <Select name="status" defaultValue={stage.status}>
-                            <option value="not_started">لم تبدأ</option>
-                            <option value="in_progress">جارية</option>
-                            <option value="blocked">معلقة</option>
-                            <option value="completed">مكتملة</option>
-                            <option value="skipped">متجاوزة</option>
-                          </Select>
-                          <Button type="submit" variant="secondary">
-                            حفظ
-                          </Button>
-                        </form>
-                      ) : null}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead className="bg-paper text-muted">
+                  <tr>
+                    <th className="px-4 py-3 text-right">#</th>
+                    <th className="px-4 py-3 text-right">المرحلة</th>
+                    <th className="px-4 py-3 text-right">الحالة</th>
+                    <th className="px-4 py-3 text-right">تحديث</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {stages.map((stage) => (
+                    <tr key={stage.id} className="border-t border-line">
+                      <td className="px-4 py-3">{stage.sequence}</td>
+                      <td className="px-4 py-3">
+                        {stage.name_ar}
+                        <p className="text-xs text-muted">{stage.name_en}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge>{stage.status}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        {hasPermission(ctx, "project.update") ? (
+                          <form action={updateProjectStageAction} className="flex min-w-[220px] flex-col gap-2 sm:flex-row">
+                            <input type="hidden" name="stageId" value={stage.id} />
+                            <Select name="status" defaultValue={stage.status}>
+                              <option value="not_started">لم تبدأ</option>
+                              <option value="in_progress">جارية</option>
+                              <option value="blocked">معلقة</option>
+                              <option value="completed">مكتملة</option>
+                              <option value="skipped">متجاوزة</option>
+                            </Select>
+                            <Button type="submit" variant="secondary">
+                              حفظ
+                            </Button>
+                          </form>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       ) : null}
